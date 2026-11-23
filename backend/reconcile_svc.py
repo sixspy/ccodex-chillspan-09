@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from auth import AuthHeader, require_user
 from db import connect
+from window_svc import conflict_count, projection, snapshot
 
 router = APIRouter(tags=["reconcile"])
 
@@ -23,7 +24,8 @@ def _chamber_recon(conn, chamber) -> dict:
         (cid,),
     ).fetchone()["c"]
     gap = quota - active
-    ok = active <= quota
+    win_conflicts = conflict_count(conn, cid)
+    ok = active <= quota and win_conflicts == 0
     return {
         "chamber_id": cid,
         "chamber_code": chamber["chamber_code"],
@@ -32,11 +34,13 @@ def _chamber_recon(conn, chamber) -> dict:
         "active_batches": active,
         "sealed_batches": sealed,
         "quota_left": gap,
+        "window_conflicts": win_conflicts,
         "balanced": ok,
         "proof": {
-            "formula": "active_batches <= quota_batches",
+            "formula": "active_batches <= quota_batches and window_conflicts == 0",
             "left": active,
             "right": quota,
+            "window_conflicts": win_conflicts,
         },
     }
 
@@ -50,10 +54,12 @@ def reconcile_all(authorization: AuthHeader = None):
         bad = [i for i in items if not i["balanced"]]
         return {
             "items": items,
+            "window_states": projection(snapshot(conn)),
             "summary": {
                 "total": len(items),
                 "balanced": len(items) - len(bad),
                 "unbalanced": len(bad),
+                "window_conflicts": sum(i["window_conflicts"] for i in items),
             },
         }
 
@@ -67,7 +73,11 @@ def reconcile_one(chamber_code: str, authorization: AuthHeader = None):
         ).fetchone()
         if not ch:
             raise HTTPException(404, "仓间不存在")
-        return _chamber_recon(conn, ch)
+        data = _chamber_recon(conn, ch)
+        data["window_states"] = [
+            s for s in projection(snapshot(conn)) if s["chamber_id"] == ch["id"]
+        ]
+        return data
 
 
 @router.get("/api/proof/batch/{batch_code}")

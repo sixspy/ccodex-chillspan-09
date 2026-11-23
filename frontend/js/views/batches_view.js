@@ -1,3 +1,5 @@
+import { windowStripTemplate } from "./window_shared.js";
+
 export const batchesViewTemplate = `
 <section class="panel">
   <h2>温控批次入库</h2>
@@ -19,19 +21,21 @@ export const batchesViewTemplate = `
     <button class="secondary" @click="refresh">刷新</button>
   </div>
   <table class="data-table">
-    <thead><tr><th>批次</th><th>仓间</th><th>探头</th><th>状态</th><th>代</th><th>极值</th><th></th></tr></thead>
+    <thead><tr><th>批次</th><th>仓间</th><th>探头</th><th>状态</th><th>窗口径</th><th>代</th><th>极值</th><th></th></tr></thead>
     <tbody>
       <tr v-for="b in batches" :key="b.id" @click="selectBatch(b)">
         <td>{{ b.batch_code }}</td>
         <td>{{ b.chamber_code }}</td>
         <td>{{ b.probe_code }}</td>
         <td><span class="badge" :class="statusClass(b.status)">{{ b.status }}</span></td>
+        <td><span class="badge" :class="b.window_state && b.window_state.effective_valid ? 'pass' : 'fail'">{{ b.window_state ? b.window_state.effective_source : "—" }}</span></td>
         <td>{{ b.generation }}</td>
         <td>{{ fmtTemp(b.min_observed) }} / {{ fmtTemp(b.max_observed) }}</td>
         <td><button class="mini-btn" @click.stop="loadBatchDetail(b.id)">详情</button></td>
       </tr>
     </tbody>
   </table>
+  ${windowStripTemplate}
   <div v-if="batchDetail" class="detail-box">
     <h3>{{ batchDetail.batch.batch_code }} · {{ batchDetail.batch.cargo_ref }}</h3>
     <p>点数 {{ batchDetail.batch.temp_points.length }} · 游标 {{ batchDetail.excursions.length }} 条</p>

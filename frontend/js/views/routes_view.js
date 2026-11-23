@@ -1,3 +1,5 @@
+import { windowStripTemplate } from "./window_shared.js";
+
 export const routesViewTemplate = `
 <section class="panel">
   <h2>冷链线路</h2>
@@ -7,10 +9,13 @@ export const routesViewTemplate = `
     <div><label>终点区域</label><input v-model="routeForm.dest_region"/></div>
     <div><label>冷链时长(h)</label><input type="number" v-model.number="routeForm.cold_hours"/></div>
     <div><label>车型</label><input v-model="routeForm.vehicle_type"/></div>
+    <div><label>窗起</label><input v-model="routeForm.window_start"/></div>
+    <div><label>窗讫</label><input v-model="routeForm.window_end"/></div>
+    <div><label>容量</label><input type="number" v-model.number="routeForm.capacity"/></div>
   </div>
   <div class="actions"><button @click="createRoute">新建线路</button></div>
   <table class="data-table">
-    <thead><tr><th>编码</th><th>起</th><th>讫</th><th>时长</th><th>车型</th><th>状态</th></tr></thead>
+    <thead><tr><th>编码</th><th>起</th><th>讫</th><th>时长</th><th>车型</th><th>线路窗</th><th>占用</th><th>状态</th></tr></thead>
     <tbody>
       <tr v-for="r in routes" :key="r.id">
         <td>{{ r.route_code }}</td>
@@ -18,9 +23,12 @@ export const routesViewTemplate = `
         <td>{{ r.dest_region }}</td>
         <td>{{ r.cold_hours }}</td>
         <td>{{ r.vehicle_type }}</td>
+        <td>{{ r.window_start ? (r.window_start + " ~ " + r.window_end) : "—" }}</td>
+        <td>{{ r.occupancy || 0 }}</td>
         <td>{{ r.status }}</td>
       </tr>
     </tbody>
   </table>
+  ${windowStripTemplate}
 </section>
 `;

@@ -10,6 +10,7 @@ from db import connect, now_iso, write_audit
 from locks import release, require_lock
 from models import SealIn
 from validators import require_calibration_fresh, validate_batch_sealable
+from window_svc import batch_window_state
 
 router = APIRouter(tags=["seal"])
 
@@ -22,7 +23,15 @@ def list_seals(authorization: AuthHeader = None):
             """SELECT s.*, b.batch_code FROM seal_snapshots s
                JOIN temp_batches b ON b.id=s.batch_id ORDER BY s.id DESC"""
         ).fetchall()
-        return {"items": [dict(r) for r in rows]}
+        items = []
+        for r in rows:
+            d = dict(r)
+            batch = conn.execute(
+                "SELECT * FROM temp_batches WHERE id=?", (d["batch_id"],)
+            ).fetchone()
+            d["window_state"] = batch_window_state(conn, batch) if batch else None
+            items.append(d)
+        return {"items": items}
 
 
 @router.post("/api/seals")
@@ -49,6 +58,9 @@ def seal_batch(body: SealIn, authorization: AuthHeader = None):
             bdict["temp_points"] = batch["temp_points"]
             validate_batch_sealable(bdict, open_exc)
             require_calibration_fresh(batch)
+            state = batch_window_state(conn, batch)
+            if state["conflict"]:
+                raise HTTPException(409, "线路窗与批次窗冲突未消除，禁止封批")
             gen = int(batch["generation"])
             manifest = body.manifest or json.dumps(
                 {

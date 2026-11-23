@@ -10,6 +10,7 @@ from db import connect, now_iso, write_audit
 from locks import release, require_lock
 from models import BatchIn
 from validators import summarize_points, validate_probe_online, validate_temp_point
+from window_svc import batch_window_state
 
 router = APIRouter(tags=["batches"])
 
@@ -49,6 +50,7 @@ def list_batches(authorization: AuthHeader = None, status: str | None = None):
         for r in rows:
             d = dict(r)
             d["temp_points"] = json.loads(d["temp_points"] or "[]")
+            d["window_state"] = batch_window_state(conn, r)
             items.append(d)
         return {"items": items}
 
@@ -78,6 +80,7 @@ def get_batch(batch_id: int, authorization: AuthHeader = None):
         ).fetchall()
         return {
             "batch": data,
+            "window_state": batch_window_state(conn, row),
             "excursions": [dict(e) for e in exc],
             "seals": [dict(s) for s in seals],
         }

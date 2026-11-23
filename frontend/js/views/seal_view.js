@@ -1,3 +1,5 @@
+import { windowStripTemplate } from "./window_shared.js";
+
 export const sealViewTemplate = `
 <section class="panel">
   <h2>封批升代</h2>
@@ -9,13 +11,15 @@ export const sealViewTemplate = `
     <div><label>快照附言</label><input v-model="sealForm.manifest"/></div>
   </div>
   <div class="actions"><button @click="doSeal">执行封批</button></div>
+  ${windowStripTemplate}
   <table class="data-table">
-    <thead><tr><th>批次</th><th>代</th><th>封批时间</th><th>附言摘要</th></tr></thead>
+    <thead><tr><th>批次</th><th>代</th><th>封批时间</th><th>窗口径</th><th>附言摘要</th></tr></thead>
     <tbody>
       <tr v-for="s in seals" :key="s.id">
         <td>{{ s.batch_code }}</td>
         <td>{{ s.batch_generation }}</td>
         <td>{{ s.sealed_at }}</td>
+        <td><span class="badge" :class="s.window_state && s.window_state.effective_valid ? 'pass' : 'fail'">{{ s.window_state ? s.window_state.effective_source : "—" }}</span></td>
         <td>{{ shortText(s.manifest) }}</td>
       </tr>
     </tbody>

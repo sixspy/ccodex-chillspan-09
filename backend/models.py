@@ -68,6 +68,21 @@ class RouteIn(BaseModel):
     dest_region: str
     cold_hours: float = Field(gt=0)
     vehicle_type: str = "冷藏车"
+    window_start: str | None = None
+    window_end: str | None = None
+    capacity: int = Field(default=0, ge=0)
+
+
+class RouteWindowPatch(BaseModel):
+    window_start: str | None = None
+    window_end: str | None = None
+
+
+class BatchWindowIn(BaseModel):
+    route_code: str
+    window_start: str
+    window_end: str
+    decision: str = "甲"
 
 
 class CarrierStubIn(BaseModel):

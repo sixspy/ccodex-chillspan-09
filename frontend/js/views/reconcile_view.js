@@ -1,3 +1,5 @@
+import { windowStripTemplate } from "./window_shared.js";
+
 export const reconcileViewTemplate = `
 <section class="panel">
   <h2>仓间对账互证</h2>
@@ -10,6 +12,7 @@ export const reconcileViewTemplate = `
     <button class="secondary" @click="loadProof">批次互证</button>
     <button class="secondary" @click="loadReconAll">全仓对账</button>
   </div>
+  ${windowStripTemplate}
   <div v-if="reconOne" class="detail-box">
     <p>配额 {{ reconOne.quota_batches }} · 在批 {{ reconOne.active_batches }} · <span :class="reconOne.balanced ? 'ok' : 'bad'">{{ reconOne.balanced ? "平衡" : "失衡" }}</span></p>
   </div>
@@ -17,13 +20,14 @@ export const reconcileViewTemplate = `
     <p>状态 {{ proofOne.status }} · 开放游标 {{ proofOne.open_excursions }} · 温谱 {{ proofOne.spectrum_exports }}</p>
   </div>
   <table class="data-table">
-    <thead><tr><th>仓间</th><th>区域</th><th>在批</th><th>余配额</th><th>平衡</th></tr></thead>
+    <thead><tr><th>仓间</th><th>区域</th><th>在批</th><th>余配额</th><th>窗冲突</th><th>平衡</th></tr></thead>
     <tbody>
       <tr v-for="r in reconAllItems" :key="r.chamber_code">
         <td>{{ r.chamber_code }}</td>
         <td>{{ r.region }}</td>
         <td>{{ r.active_batches }}</td>
         <td>{{ r.quota_left }}</td>
+        <td><span class="badge" :class="r.window_conflicts ? 'fail' : 'pass'">{{ r.window_conflicts }}</span></td>
         <td>{{ r.balanced ? "是" : "否" }}</td>
       </tr>
     </tbody>

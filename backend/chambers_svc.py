@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from auth import AuthHeader, require_user, require_writer
 from db import connect, now_iso, write_audit
 from models import ChamberIn
+from window_svc import snapshot
 
 router = APIRouter(tags=["chambers"])
 
@@ -23,7 +24,16 @@ def list_chambers(authorization: AuthHeader = None, region: str | None = None):
             rows = conn.execute(
                 "SELECT * FROM cold_chambers ORDER BY id"
             ).fetchall()
-        return {"items": [dict(r) for r in rows]}
+        win_states = snapshot(conn)
+        items = []
+        for r in rows:
+            d = dict(r)
+            d["window_conflicts"] = sum(
+                1 for s in win_states
+                if s["chamber_id"] == r["id"] and s["conflict"]
+            )
+            items.append(d)
+        return {"items": items}
 
 
 @router.get("/api/chambers/{chamber_id}")
@@ -49,12 +59,15 @@ def get_chamber(chamber_id: int, authorization: AuthHeader = None):
                WHERE chamber_id=? AND status NOT IN ('已封批','作废')""",
             (chamber_id,),
         ).fetchone()["c"]
+        win_states = [s for s in snapshot(conn) if s["chamber_id"] == chamber_id]
         return {
             "chamber": dict(ch),
             "probes": [dict(p) for p in probes],
             "recent_batches": [dict(b) for b in batches],
             "active_batch_count": active,
             "quota_left": int(ch["quota_batches"]) - int(active),
+            "window_conflicts": sum(1 for s in win_states if s["conflict"]),
+            "window_states": win_states,
         }
 
 

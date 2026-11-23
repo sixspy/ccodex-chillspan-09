@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS temp_batches(
   max_observed REAL,
   created_at TEXT NOT NULL,
   sealed_at TEXT,
+  route_id INTEGER,
+  window_start TEXT,
+  window_end TEXT,
   FOREIGN KEY(chamber_id) REFERENCES cold_chambers(id),
   FOREIGN KEY(probe_id) REFERENCES probes(id)
 );
@@ -152,6 +155,42 @@ CREATE TABLE IF NOT EXISTS route_plans(
   cold_hours REAL NOT NULL,
   vehicle_type TEXT NOT NULL,
   status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  window_start TEXT,
+  window_end TEXT,
+  capacity INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS batch_window_shadows(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_id INTEGER NOT NULL,
+  route_id INTEGER NOT NULL,
+  window_start TEXT NOT NULL,
+  window_end TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  note TEXT,
+  FOREIGN KEY(batch_id) REFERENCES temp_batches(id),
+  FOREIGN KEY(route_id) REFERENCES route_plans(id)
+);
+CREATE TABLE IF NOT EXISTS route_batch_minutes(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shift_key TEXT NOT NULL,
+  route_id INTEGER NOT NULL,
+  route_code TEXT NOT NULL,
+  batch_id INTEGER NOT NULL,
+  batch_code TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  detail TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(shift_key, route_id, batch_id)
+);
+CREATE TABLE IF NOT EXISTS window_conflict_events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  route_code TEXT,
+  batch_code TEXT,
+  detail TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS chamber_locks(
@@ -363,7 +402,8 @@ def seed_routes(conn: sqlite3.Connection) -> None:
             continue
         conn.execute(
             """INSERT INTO route_plans(route_code,origin_region,dest_region,cold_hours,
-               vehicle_type,status,created_at) VALUES (?,?,?,?,?,?,?)""",
+               vehicle_type,status,created_at,window_start,window_end,capacity)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (
                 row["route_code"],
                 row["origin_region"],
@@ -372,6 +412,9 @@ def seed_routes(conn: sqlite3.Connection) -> None:
                 row.get("vehicle_type", "冷藏车"),
                 row.get("status", "启用"),
                 row.get("created_at", now_iso()),
+                row.get("window_start"),
+                row.get("window_end"),
+                int(row.get("capacity", 0)),
             ),
         )
 
@@ -398,9 +441,34 @@ def seed_lineage_samples(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """老库补列：线路窗/容量与批次正式窗字段。"""
+    wanted = {
+        "temp_batches": [
+            ("route_id", "INTEGER"),
+            ("window_start", "TEXT"),
+            ("window_end", "TEXT"),
+        ],
+        "route_plans": [
+            ("window_start", "TEXT"),
+            ("window_end", "TEXT"),
+            ("capacity", "INTEGER NOT NULL DEFAULT 0"),
+        ],
+    }
+    for table, cols in wanted.items():
+        have = {
+            r["name"]
+            for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        for name, decl in cols:
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _ensure_columns(conn)
         seed_users(conn)
         seed_chambers(conn)
         seed_probes(conn)

@@ -102,7 +102,20 @@ createApp({
       dest_region: "西南",
       cold_hours: 28,
       vehicle_type: "冷藏车",
+      window_start: "2026-11-24T08:00:00",
+      window_end: "2026-11-24T12:00:00",
+      capacity: 4,
     });
+    const batchWindowForm = ref({
+      batch_id: 0,
+      route_code: "RT-NEW-01",
+      window_start: "2026-11-24T08:00:00",
+      window_end: "2026-11-24T12:00:00",
+      decision: "甲",
+    });
+    const winCoord = ref({ items: [], summary: null });
+    const windowEvents = ref([]);
+    const windowMinutes = ref([]);
     const carrierForm = ref({ carrier_name: "顺冷物流", row_count: 80 });
     const thawForm = ref({ batch_id: null, thaw_minutes: 15 });
 
@@ -192,7 +205,7 @@ createApp({
       if (!token.value) return;
       clearFlash();
       try {
-        const [ch, pr, bt, ex, sl, sp, lg, cal, rt, d, cj, tj] = await Promise.all([
+        const [ch, pr, bt, ex, sl, sp, lg, cal, rt, d, cj, tj, wc, we, wm] = await Promise.all([
           api.chambers(),
           api.probes(),
           api.batches(),
@@ -205,6 +218,9 @@ createApp({
           api.dashboard(),
           api.carrierJobs(),
           api.thawJobs(),
+          api.windowCoordination(),
+          api.windowEvents(),
+          api.routeBatchMinutes(),
         ]);
         chambers.value = ch.items || [];
         probes.value = pr.items || [];
@@ -218,6 +234,9 @@ createApp({
         dash.value = d || {};
         carrierJobs.value = cj.items || [];
         thawJobs.value = tj.items || [];
+        winCoord.value = wc || { items: [], summary: null };
+        windowEvents.value = we.items || [];
+        windowMinutes.value = wm.items || [];
 
         if (chambers.value.length && !probeForm.value.chamber_id) {
           probeForm.value.chamber_id = chambers.value[0].id;
@@ -239,6 +258,9 @@ createApp({
         }
         if (probes.value.length) {
           calForm.value.probe_id = probes.value[0].id;
+        }
+        if (batches.value.length && !batchWindowForm.value.batch_id) {
+          batchWindowForm.value.batch_id = batches.value[0].id;
         }
       } catch (e) {
         flashErr(e);
@@ -423,6 +445,38 @@ createApp({
       }
     }
 
+    async function loadWindowCoord() {
+      clearFlash();
+      try {
+        const r = await api.windowCoordination();
+        winCoord.value = r || { items: [], summary: null };
+        flashOk("窗协调已刷新");
+      } catch (e) {
+        flashErr(e);
+      }
+    }
+
+    async function submitBatchWindow() {
+      clearFlash();
+      try {
+        const f = batchWindowForm.value;
+        const row = await api.setBatchWindow(f.batch_id, {
+          route_code: f.route_code,
+          window_start: f.window_start,
+          window_end: f.window_end,
+          decision: f.decision,
+        });
+        flashOk(
+          row.effective_valid
+            ? `批次窗已生效（${row.effective_source}）`
+            : `批次窗未生效（${row.effective_source}）`
+        );
+        await refresh();
+      } catch (e) {
+        flashErr(e);
+      }
+    }
+
     async function doCarrierStub() {
       clearFlash();
       try {
@@ -488,6 +542,10 @@ createApp({
       lineageForm,
       calForm,
       routeForm,
+      batchWindowForm,
+      winCoord,
+      windowEvents,
+      windowMinutes,
       carrierForm,
       thawForm,
       batchProbes,
@@ -521,6 +579,8 @@ createApp({
       loadReconAll,
       addCalibration,
       createRoute,
+      loadWindowCoord,
+      submitBatchWindow,
       doCarrierStub,
       doThawStub,
     };

@@ -66,6 +66,19 @@ export function createApi(getToken, onUnauthorized) {
       req("/api/calibrations", { method: "POST", body: JSON.stringify(data) }),
     routes: () => req("/api/routes"),
     createRoute: (data) => req("/api/routes", { method: "POST", body: JSON.stringify(data) }),
+    patchRouteWindow: (id, data) =>
+      req(`/api/routes/${id}/window`, { method: "PATCH", body: JSON.stringify(data) }),
+    setBatchWindow: (id, data) =>
+      req(`/api/batches/${id}/window`, { method: "POST", body: JSON.stringify(data) }),
+    windowCoordination: (batchCode) =>
+      req(
+        batchCode
+          ? `/api/window-coordination?batch_code=${encodeURIComponent(batchCode)}`
+          : "/api/window-coordination"
+      ),
+    windowConsistency: () => req("/api/window-coordination/consistency"),
+    routeBatchMinutes: () => req("/api/route-batch-minutes"),
+    windowEvents: () => req("/api/window-conflict-events"),
     audit: () => req("/api/audit?limit=150"),
     contention: () => req("/api/contention"),
     locks: () => req("/api/locks"),

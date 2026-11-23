@@ -1,6 +1,8 @@
 """仓间锁与争用登记（公共并发面）。"""
 from __future__ import annotations
 
+import sqlite3
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -15,25 +17,41 @@ class LockIn(BaseModel):
     action: str = "acquire"
 
 
-def try_acquire(conn, lock_key: str, holder: str) -> bool:
+def try_acquire_owned(conn, lock_key: str, holder: str) -> tuple[bool, bool]:
+    """返回 (是否持有, 是否本次新建)。
+
+    同持有者重入算持有但 owned=False：调用方收尾时不得释放别人仍在途的锁。
+    """
     now = now_iso()
-    row = conn.execute(
-        "SELECT holder FROM chamber_locks WHERE lock_key=?", (lock_key,)
-    ).fetchone()
-    if row is None:
+    try:
         conn.execute(
             "INSERT INTO chamber_locks(lock_key,holder,acquired_at) VALUES (?,?,?)",
             (lock_key, holder, now),
         )
-        return True
-    if row["holder"] == holder:
-        return True
-    conn.execute(
-        """INSERT INTO contention_log(lock_key,actor,action,detail,created_at)
-           VALUES (?,?,?,?,?)""",
-        (lock_key, holder, "争用", f"持有者={row['holder']}", now),
-    )
-    return False
+    except sqlite3.IntegrityError:
+        row = conn.execute(
+            "SELECT holder FROM chamber_locks WHERE lock_key=?", (lock_key,)
+        ).fetchone()
+        if row is not None and row["holder"] == holder:
+            return True, False
+        conn.execute(
+            """INSERT INTO contention_log(lock_key,actor,action,detail,created_at)
+               VALUES (?,?,?,?,?)""",
+            (
+                lock_key,
+                holder,
+                "争用",
+                f"持有者={row['holder'] if row else '未知'}",
+                now,
+            ),
+        )
+        return False, False
+    return True, True
+
+
+def try_acquire(conn, lock_key: str, holder: str) -> bool:
+    ok, _owned = try_acquire_owned(conn, lock_key, holder)
+    return ok
 
 
 def release(conn, lock_key: str, holder: str) -> None:
